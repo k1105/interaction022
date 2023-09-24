@@ -26,6 +26,7 @@ export const HandSketch = ({ handpose }: Props) => {
   const r = 120;
   const offset = 30;
   const multi = 1.3;
+  const stackRef = useRef<number>(0);
 
   const distList: number[] = new Array(10).fill(50);
   const flickerArray: boolean[] = new Array(10).fill(false);
@@ -126,9 +127,7 @@ export const HandSketch = ({ handpose }: Props) => {
       const dRight = distList[2 * n + 1];
       if (dLeft < 10) {
         if (!flickerArray[2 * n]) {
-          Tone.loaded().then(() => {
-            player.start();
-          });
+          stackRef.current++;
           flickerArray[2 * n] = true;
         }
       } else {
@@ -136,9 +135,7 @@ export const HandSketch = ({ handpose }: Props) => {
       }
       if (dRight < 10) {
         if (!flickerArray[2 * n + 1]) {
-          Tone.loaded().then(() => {
-            player.start();
-          });
+          stackRef.current++;
           flickerArray[2 * n + 1] = true;
         }
       } else {
@@ -170,6 +167,13 @@ export const HandSketch = ({ handpose }: Props) => {
         -dRight
       );
     }
+
+    if (stackRef.current > 0) {
+      // Tone.loaded().then(() => {
+      player.start();
+      // });
+    }
+    stackRef.current = Math.max(0, stackRef.current - 1);
   };
 
   const windowResized = (p5: p5Types) => {
