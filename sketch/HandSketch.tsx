@@ -4,7 +4,6 @@ import { MutableRefObject, useRef } from "react";
 import { Hand } from "@tensorflow-models/hand-pose-detection";
 import { getSmoothedHandpose } from "../lib/getSmoothedHandpose";
 import { convertHandToHandpose } from "../lib/converter/convertHandToHandpose";
-import { dotHand } from "../lib/p5/dotHand";
 import { isFront } from "../lib/detector/isFront";
 import { Monitor } from "../components/Monitor";
 // import { Recorder } from "../components/Recorder";
@@ -24,29 +23,32 @@ const Sketch = dynamic(import("react-p5"), {
 export const HandSketch = ({ handpose }: Props) => {
   const handposeHistory = new HandposeHistory();
   const displayHands = new DisplayHands();
-  const r = 50;
+  const r = 120;
   const offset = 30;
+  const multi = 1.3;
+
+  const distList: number[] = new Array(10).fill(50);
   const flickerArray: boolean[] = new Array(10).fill(false);
-  const toneArray = [
-    "C4",
-    "D4",
-    "E4",
-    "F4",
-    "G4",
-    "A4",
-    "B4",
-    "C5",
-    "D5",
-    "E5",
-  ];
+  // const toneArray = [
+  //   "C4",
+  //   "D4",
+  //   "E4",
+  //   "F4",
+  //   "G4",
+  //   "A4",
+  //   "B4",
+  //   "C5",
+  //   "D5",
+  //   "E5",
+  // ];
 
   const debugLog = useRef<{ label: string; value: any }[]>([]);
 
   const synth = new Tone.Synth().toDestination();
 
-  // const player = new Tone.Player(
-  //   "https://k1105.github.io/sound_effect/audio/wood_attack.m4a"
-  // ).toDestination();
+  const player = new Tone.Player(
+    "https://k1105.github.io/sound_effect/audio/wood_attack.m4a"
+  ).toDestination();
 
   const preload = (p5: p5Types) => {
     // 画像などのロードを行う
@@ -77,25 +79,16 @@ export const HandSketch = ({ handpose }: Props) => {
         label: hand.handedness + " accuracy",
         value: hand.score,
       });
-      debugLog.current.push({
-        label: hand.handedness + " is front",
-        //@ts-ignore
-        value: isFront(hand.keypoints, hand.handedness.toLowerCase()),
-      });
     }
 
     p5.clear();
     displayHands.update(hands);
 
+    let start;
+    let end;
+
     if (displayHands.left.pose.length > 0) {
       const hand = displayHands.left.pose;
-      p5.push();
-      p5.fill(255, displayHands.left.opacity);
-      p5.translate(0, window.innerHeight / 2);
-
-      let start;
-      let end;
-
       for (let n = 0; n < 5; n++) {
         if (n === 0) {
           start = 2;
@@ -103,48 +96,15 @@ export const HandSketch = ({ handpose }: Props) => {
           start = 4 * n + 1;
         }
         end = 4 * n + 4;
-        p5.translate(window.innerWidth / 6, 0);
-
-        const d = (hand[end].y - hand[start].y) / 1.5;
-        if (d > 0) {
-          p5.line(-offset, 0, -(3 * r) / 2, 0);
-          if (!flickerArray[2 * n]) {
-            synth.triggerAttackRelease(toneArray[n + 5], "8n");
-
-            flickerArray[2 * n] = true;
-          }
-        } else {
-          flickerArray[2 * n] = false;
-          if (r < p5.abs(d)) {
-            p5.line(-offset, 0, -offset, -3 * r);
-          } else {
-            p5.line(
-              -offset,
-              0,
-              -offset - p5.sqrt(r ** 2 - d ** 2),
-              (3 * d) / 2
-            );
-            p5.line(
-              -offset - p5.sqrt(r ** 2 - d ** 2),
-              (3 * d) / 2,
-              -offset,
-              3 * d
-            );
-          }
-        }
+        distList[2 * n] = Math.min(
+          Math.max((hand[start].y - hand[end].y) * multi, 0),
+          r
+        );
       }
-      p5.pop();
     }
 
     if (displayHands.right.pose.length > 0) {
       const hand = displayHands.right.pose;
-      p5.push();
-      p5.stroke(255, displayHands.left.opacity);
-      p5.translate(0, window.innerHeight / 2);
-
-      let start;
-      let end;
-
       for (let n = 0; n < 5; n++) {
         if (n === 0) {
           start = 2;
@@ -152,31 +112,63 @@ export const HandSketch = ({ handpose }: Props) => {
           start = 4 * n + 1;
         }
         end = 4 * n + 4;
-        p5.translate(window.innerWidth / 6, 0);
-
-        const d = (hand[end].y - hand[start].y) / 1.5;
-        if (d > 0) {
-          p5.line(offset, 0, (3 * r) / 2, 0);
-          if (!flickerArray[2 * n + 1]) {
-            synth.triggerAttackRelease(toneArray[n], "8n");
-            flickerArray[2 * n + 1] = true;
-          }
-        } else {
-          flickerArray[2 * n + 1] = false;
-          if (r < p5.abs(d)) {
-            p5.line(offset, 0, offset, -3 * r);
-          } else {
-            p5.line(offset, 0, offset + p5.sqrt(r ** 2 - d ** 2), (3 * d) / 2);
-            p5.line(
-              offset + p5.sqrt(r ** 2 - d ** 2),
-              (3 * d) / 2,
-              offset,
-              3 * d
-            );
-          }
-        }
+        distList[2 * n + 1] = Math.min(
+          Math.max((hand[start].y - hand[end].y) * multi, 0),
+          r
+        );
       }
-      p5.pop();
+    }
+
+    p5.translate(0, p5.height / 2);
+    for (let n = 0; n < 5; n++) {
+      p5.translate(p5.width / 6, 0);
+      const dLeft = distList[2 * n];
+      const dRight = distList[2 * n + 1];
+      if (dLeft < 10) {
+        if (!flickerArray[2 * n]) {
+          Tone.loaded().then(() => {
+            player.start();
+          });
+          flickerArray[2 * n] = true;
+        }
+      } else {
+        flickerArray[2 * n] = false;
+      }
+      if (dRight < 10) {
+        if (!flickerArray[2 * n + 1]) {
+          Tone.loaded().then(() => {
+            player.start();
+          });
+          flickerArray[2 * n + 1] = true;
+        }
+      } else {
+        flickerArray[2 * n + 1] = false;
+      }
+      p5.line(
+        -offset,
+        0,
+        -offset - p5.sqrt((r / 2) ** 2 - (dLeft / 2) ** 2),
+        -dLeft / 2
+      );
+      p5.line(
+        -offset - p5.sqrt((r / 2) ** 2 - (dLeft / 2) ** 2),
+        -dLeft / 2,
+        -offset,
+        -dLeft
+      );
+
+      p5.line(
+        offset,
+        0,
+        offset + p5.sqrt((r / 2) ** 2 - (dRight / 2) ** 2),
+        -dRight / 2
+      );
+      p5.line(
+        offset + p5.sqrt((r / 2) ** 2 - (dRight / 2) ** 2),
+        -dRight / 2,
+        offset,
+        -dRight
+      );
     }
   };
 
